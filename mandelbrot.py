@@ -27,28 +27,31 @@ def create_grid(min_x, max_x, min_y, max_y, W, H):
     return xs + ys
 
 
-def get_image(ans):
+def init(min_x, max_x, min_y, max_y, W, H):
+    grid = create_grid(min_x, max_x, min_y, max_y, W, H)
+    z = np.zeros_like(grid)
+    ans = np.zeros_like(grid, dtype=np.float64)
+    initial_N = 0
+    return grid, z, ans, initial_N
+
+
+def get_image(ans1):
+    ans = np.copy(ans1)
     ans[ans > 0] += np.max(ans) * 0.1
     ans /= np.max(ans)
     return np.repeat(np.expand_dims(ans, 2), 3, axis=2)
 
 
-def escape(grid, args):
-    ans = np.zeros_like(grid, dtype=np.float64)
-    z = np.zeros_like(grid)
+def escape(grid, z, ans, initial_N, N):
     valid = np.logical_and(np.abs(z.real) < 2, np.abs(z.imag) < 2)
 
-    for k in range(1, args.N + 1, 1):
+    for k in range(1, N + 1, 1):
         z[valid] = z[valid]**2 + grid[valid]
         new_valid = np.logical_and(np.abs(z.real) < 2, np.abs(z.imag) < 2)
-        ans[np.logical_and(valid, np.logical_not(new_valid))] = k
+        ans[np.logical_and(valid, np.logical_not(new_valid))] = k + initial_N
         valid = new_valid
 
-    return get_image(ans)
-
-
-grid = create_grid(min_x, max_x, min_y, max_y, W, H)
-image = escape(grid, args)
+    return ans, z, initial_N + N
 
 
 drawing = False
@@ -56,7 +59,7 @@ ix = iy = 0
 def draw_rectangle(event, x, y, flags, param):
     global ix, iy, drawing
     global min_x, max_x, min_y, max_y
-    global image
+    global grid, z, ans, initial_N
 
     if event == cv2.EVENT_LBUTTONDOWN:
         drawing = True
@@ -75,15 +78,19 @@ def draw_rectangle(event, x, y, flags, param):
 
         max_x, min_x = x / W * (max_x - min_x) + min_x, ix / W * (max_x - min_x) + min_x
         max_y, min_y = y / H * (max_y - min_y) + min_y, iy / H * (max_y - min_y) + min_y
-        grid = create_grid(min_x, max_x, min_y, max_y, W, H)
-        image = escape(grid, args)
+        grid, z, ans, initial_N = init(min_x, max_x, min_y, max_y, W, H)
 
 
 cv2.namedWindow('image')
 cv2.setMouseCallback('image', draw_rectangle)
 
 
+grid, z, ans, initial_N = init(min_x, max_x, min_y, max_y, W, H)
 while True:
+    if initial_N < 2000:
+        ans, z, initial_N = escape(grid, z, ans, initial_N, 50)
+        image = get_image(ans)
+
     cv2.imshow('image', image)
     k = cv2.waitKey(1) & 0xFF
     if k == ord('b'):
